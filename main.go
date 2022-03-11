@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-github/v43/github"
@@ -15,6 +16,22 @@ func main() {
 
 	ctx := context.Background()
 
+	latest := getLatestReleasedVersion(ctx, client)
+	fmt.Println("Last release: ", latest)
+
+	notes := getAllReleaseNotes(ctx, client)
+
+	fmt.Println("features:")
+	for _, feature := range notes.features {
+		fmt.Println("\t", feature)
+	}
+	fmt.Println("bugs:")
+	for _, bug := range notes.bugs {
+		fmt.Println("\t", bug)
+	}
+}
+
+func getLatestReleasedVersion(ctx context.Context, client *github.Client) string {
 	rels, resp, err := client.Repositories.ListReleases(
 		ctx,
 		"replicatedhq",
@@ -36,18 +53,20 @@ func main() {
 			break
 		}
 	}
-	fmt.Println("Last release: ", latest)
+	return latest
+}
 
-	prs, resp, err := client.PullRequests.List(
+type releaseNotes struct {
+	features []string
+	bugs     []string
+}
+
+func getAllReleaseNotes(ctx context.Context, client *github.Client) releaseNotes {
+	rls, resp, err := client.Repositories.ListReleases(
 		ctx,
 		"replicatedhq",
 		"kots",
-		&github.PullRequestListOptions{
-			State: "closed",
-			ListOptions: github.ListOptions{
-				PerPage: 50,
-			},
-		},
+		&github.ListOptions{PerPage: 1},
 	)
 	if err != nil {
 		panic(err)
@@ -57,38 +76,58 @@ func main() {
 		panic("resp not code 200")
 	}
 
-	var isMinor bool
-	for _, pr := range prs {
-		prType := []string{}
-		if pr.MergedAt == nil {
-			continue
+	releaseNotes := releaseNotes{
+		features: []string{},
+		bugs:     []string{},
+	}
+
+	r := regexp.MustCompile(`#(\d{1,5})`)
+	prsToCheck := r.FindAllStringSubmatch(*rls[0].Body, -1)
+	for _, prToCheck := range prsToCheck {
+		prNumber, err := strconv.Atoi(prToCheck[1])
+		if err != nil {
+			panic(err)
 		}
-		for _, label := range pr.Labels {
-			if strings.EqualFold(*label.Name, "type::feature") {
-				isMinor = true
-			}
-			if strings.HasPrefix(*label.Name, "type::") {
-				prType = append(prType, strings.TrimPrefix(*label.Name, "type::"))
-			}
+		pr, resp, err := client.PullRequests.Get(
+			ctx,
+			"replicatedhq",
+			"kots",
+			prNumber,
+		)
+		if err != nil {
+			panic(err)
 		}
-		fmt.Println(*pr.MergeCommitSHA, prType, getReleaseNotes(pr.GetBody()))
-		if strings.HasPrefix(*pr.MergeCommitSHA, os.Args[1]) {
-			break
+
+		if resp.StatusCode != 200 {
+			panic("resp not code 200")
+		}
+
+		notes := getReleaseNotes(*pr.Body)
+
+		if !strings.EqualFold(notes, "NONE") {
+			for _, lbl := range pr.Labels {
+				switch {
+				case strings.EqualFold(*lbl.Name, "type::feature"):
+					releaseNotes.features = append(releaseNotes.features, notes)
+				case strings.EqualFold(*lbl.Name, "type::bug"):
+					releaseNotes.bugs = append(releaseNotes.bugs, notes)
+				}
+				break
+			}
 		}
 	}
-	fmt.Println("is patch release: ", !isMinor)
+
+	return releaseNotes
 }
 
 func getReleaseNotes(raw string) string {
-	md := markdown.New(markdown.XHTMLOutput(true), markdown.Nofollow(true))
+	md := markdown.New()
 	tokens := md.Parse([]byte(raw))
 
-	//Print the result
 	for _, t := range tokens {
 		snippet := getSnippet(t)
-
 		if snippet.content != "" && snippet.lang == "release-note" {
-			return snippet.content
+			return strings.TrimSpace(snippet.content)
 		}
 	}
 	return "NONE"
@@ -103,16 +142,6 @@ type snippet struct {
 //getSnippet extract only code snippet from markdown object.
 func getSnippet(tok markdown.Token) snippet {
 	switch tok := tok.(type) {
-	case *markdown.CodeBlock:
-		return snippet{
-			tok.Content,
-			"code",
-		}
-	case *markdown.CodeInline:
-		return snippet{
-			tok.Content,
-			"code inline",
-		}
 	case *markdown.Fence:
 		return snippet{
 			tok.Content,
