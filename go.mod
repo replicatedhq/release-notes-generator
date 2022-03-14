@@ -1,4 +1,4 @@
-module github.com/replicatedhq/semver-helper
+module github.com/replicatedhq/kots-release-helper
 
 go 1.17
 
