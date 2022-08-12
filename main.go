@@ -2,91 +2,219 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"log"
+	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
+	"time"
 
+	semver "github.com/Masterminds/semver/v3"
+	"github.com/dustin/go-humanize/english"
 	"github.com/google/go-github/v43/github"
 	"gitlab.com/golang-commonmark/markdown"
+	"golang.org/x/oauth2"
 )
 
+var rnTemplate = `## {{.Semver}}
+
+Released on {{.DateString}}
+
+Support for Kubernetes: {{.SupportedVersions}}
+{{""}}
+{{- if .Features }}
+### New Features {#new-features-{{.SemverDash}}}
+{{- range .Features}}
+* {{.}}.
+{{- end}}
+{{end}}
+
+{{- if .Improvements }}
+### Improvements {#improvements-{{.SemverDash}}}
+{{- range .Improvements}}
+* {{.}}.
+{{- end}}
+{{end}}
+
+{{- if .Bugs }}
+### Bug Fixes {#bug-fixes-{{.SemverDash}}}
+{{- range .Bugs}}
+* {{.}}.
+{{- end}}
+{{end}}`
+
+const GithubAuthTokenEnvironmentVarName = "GITHUB_AUTH_TOKEN"
+
+type ReleaseNotes struct {
+	Semver            string
+	SemverDash        string
+	DateString        string
+	SupportedVersions string
+	Features          []string
+	Improvements      []string
+	Bugs              []string
+}
+
 func main() {
-	client := github.NewClient(nil)
+	var base string
+	flag.StringVar(&base, "base", "", "Base of release notes diff (defaults to the last release)")
+	var head string
+	flag.StringVar(&head, "head", "main", "Head of release notes diff")
+	var semverOverride string
+	flag.StringVar(&semverOverride, "semver", "", "Override the automatically determined semver for the release")
+	var supportedVersions string
+	flag.StringVar(&supportedVersions, "supported-versions", "1.21,1.22,1.23,1.24", "Comma-separated list of supported Kubernetes versions")
+	var showPrLinks bool
+	flag.BoolVar(&showPrLinks, "pr-links", false, "Include links back to pull requests")
+	flag.Parse()
+
+	var httpClient *http.Client
+	// if we have a token, use it to authenticate to prevent rate limiting
+	if token, ok := os.LookupEnv(GithubAuthTokenEnvironmentVarName); ok {
+		ts := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: token},
+		)
+		httpClient = oauth2.NewClient(context.Background(), ts)
+	} else {
+		fmt.Fprintf(os.Stderr, "WARNING: No %s environment variable found, rate limiting may occur\n", GithubAuthTokenEnvironmentVarName)
+	}
+
+	client := github.NewClient(httpClient)
 
 	ctx := context.Background()
 
-	latest := getLatestReleasedVersion(ctx, client)
-	fmt.Println("Last release: ", latest)
-
-	notes := getAllReleaseNotes(ctx, client)
-
-	fmt.Println("features:")
-	for _, feature := range notes.features {
-		fmt.Println("\t", feature)
+	// get the latest released version if we don't have a base
+	if base == "" {
+		latest, err := getLatestReleasedVersion(ctx, client)
+		if err != nil {
+			log.Fatalf("Failed to get latest released version: %v", err)
+		}
+		base = latest
 	}
-	fmt.Println("bugs:")
-	for _, bug := range notes.bugs {
-		fmt.Println("\t", bug)
+
+	notes, err := getAllReleaseNotes(ctx, client, base, head, showPrLinks)
+	if err != nil {
+		log.Fatalf("Failed to get release notes: %v", err)
+	}
+
+	// determine semver increment
+	ver, err := semver.NewVersion(base)
+	if err != nil {
+		log.Fatalf("Failed to parse semver: %v", err)
+	}
+	var next semver.Version
+	if semverOverride != "" {
+		override, err := semver.NewVersion(semverOverride)
+		if err != nil {
+			log.Fatalf("Failed to parse semver: %v", err)
+		}
+		next = *override
+	} else if len(notes.Features) > 0 {
+		next = ver.IncMinor()
+	} else {
+		next = ver.IncMinor()
+	}
+
+	notes.Semver = next.String()
+	notes.SemverDash = strings.ReplaceAll(notes.Semver, ".", "-")
+	notes.DateString = time.Now().Format("January 2, 2006")
+	notes.SupportedVersions = english.OxfordWordSeries(strings.Split(supportedVersions, ","), "and")
+
+	t := template.Must(template.New("template").Parse(rnTemplate))
+	err = t.Execute(os.Stdout, notes)
+	if err != nil {
+		log.Fatalf("Failed to execute template: %v", err)
 	}
 }
 
-func getLatestReleasedVersion(ctx context.Context, client *github.Client) string {
-	rels, resp, err := client.Repositories.ListReleases(
-		ctx,
-		"replicatedhq",
-		"kots",
-		&github.ListOptions{},
-	)
-	if err != nil {
-		panic(err)
+func getLatestReleasedVersion(ctx context.Context, client *github.Client) (string, error) {
+	var releases []*github.RepositoryRelease
+	listOptions := github.ListOptions{
+		Page:    0,
+		PerPage: 100,
 	}
-
-	if resp.StatusCode != 200 {
-		panic("resp not code 200")
+	for {
+		page, response, err := client.Repositories.ListReleases(ctx, "replicatedhq", "kots", &listOptions)
+		if err != nil {
+			return "", err
+		}
+		if response.StatusCode != 200 {
+			return "", fmt.Errorf("unexpected status code when listing releases: %d", response.StatusCode)
+		}
+		if len(page) > 0 {
+			releases = append(releases, page...)
+		}
+		if response.NextPage == 0 {
+			break
+		}
+		listOptions.Page = response.NextPage
 	}
 
 	latest := ""
-	for _, rel := range rels {
+	for _, rel := range releases {
 		if !*rel.Prerelease {
 			latest = rel.GetTagName()
 			break
 		}
 	}
-	return latest
+	return latest, nil
 }
 
-type releaseNotes struct {
-	features []string
-	bugs     []string
-}
-
-func getAllReleaseNotes(ctx context.Context, client *github.Client) releaseNotes {
-	rls, resp, err := client.Repositories.ListReleases(
-		ctx,
-		"replicatedhq",
-		"kots",
-		&github.ListOptions{PerPage: 1},
-	)
-	if err != nil {
-		panic(err)
+func getAllReleaseNotes(ctx context.Context, client *github.Client, base, head string, showPrLinks bool) (*ReleaseNotes, error) {
+	var commits []*github.RepositoryCommit
+	listOptions := github.ListOptions{
+		Page:    0,
+		PerPage: 100,
 	}
-
-	if resp.StatusCode != 200 {
-		panic("resp not code 200")
-	}
-
-	releaseNotes := releaseNotes{
-		features: []string{},
-		bugs:     []string{},
-	}
-
-	r := regexp.MustCompile(`#(\d{1,5})`)
-	prsToCheck := r.FindAllStringSubmatch(*rls[0].Body, -1)
-	for _, prToCheck := range prsToCheck {
-		prNumber, err := strconv.Atoi(prToCheck[1])
+	for {
+		cmp, response, err := client.Repositories.CompareCommits(
+			ctx,
+			"replicatedhq",
+			"kots",
+			base,
+			head,
+			&listOptions,
+		)
 		if err != nil {
-			panic(err)
+			return nil, err
+		}
+		if response.StatusCode != 200 {
+			return nil, fmt.Errorf("unexpected status code when getting commits: %d", response.StatusCode)
+		}
+		if len(cmp.Commits) > 0 {
+			commits = append(commits, cmp.Commits...)
+		}
+		if response.NextPage == 0 {
+			break
+		}
+		listOptions.Page = response.NextPage
+	}
+
+	// Picks up merge commits and squash-merged PRs
+	r := regexp.MustCompile(`#(\d{1,5})`)
+
+	prsToCheck := []string{}
+	for _, commit := range commits {
+		matches := r.FindStringSubmatch(*commit.Commit.Message)
+		if len(matches) > 1 {
+			prsToCheck = append(prsToCheck, matches[1])
+		}
+	}
+
+	releaseNotes := ReleaseNotes{
+		Features:     []string{},
+		Improvements: []string{},
+		Bugs:         []string{},
+	}
+
+	for _, prToCheck := range prsToCheck {
+		prNumber, err := strconv.Atoi(prToCheck)
+		if err != nil {
+			return nil, err
 		}
 		pr, resp, err := client.PullRequests.Get(
 			ctx,
@@ -95,39 +223,51 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client) releaseNotes
 			prNumber,
 		)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
-
 		if resp.StatusCode != 200 {
-			panic("resp not code 200")
+			return nil, fmt.Errorf("unexpected status code when getting PR: %d", resp.StatusCode)
 		}
 
-		notes := getReleaseNotes(*pr.Body)
+		if pr.Body == nil {
+			continue
+		}
 
-		if !strings.EqualFold(notes, "NONE") {
-			for _, lbl := range pr.Labels {
-				switch {
-				case strings.EqualFold(*lbl.Name, "type::feature"):
-					releaseNotes.features = append(releaseNotes.features, notes)
-				case strings.EqualFold(*lbl.Name, "type::bug"):
-					releaseNotes.bugs = append(releaseNotes.bugs, notes)
-				}
-				break
+		note := getReleaseNote(*pr.Body)
+		if strings.EqualFold(note, "NONE") {
+			continue
+		}
+
+		note = cleanReleaseNote(note)
+
+		if showPrLinks {
+			note = fmt.Sprintf("[#%d](%s) %s", prNumber, *pr.HTMLURL, note)
+		}
+
+		for _, lbl := range pr.Labels {
+			switch {
+			case strings.EqualFold(*lbl.Name, "type::feature"):
+				// TODO: Need some way to determine if this is a feature or an improvement
+				releaseNotes.Features = append(releaseNotes.Features, note)
+			case strings.EqualFold(*lbl.Name, "type::bug"):
+				releaseNotes.Bugs = append(releaseNotes.Bugs, note)
 			}
+			break
 		}
 	}
 
-	return releaseNotes
+	return &releaseNotes, nil
 }
 
-func getReleaseNotes(raw string) string {
+func getReleaseNote(raw string) string {
 	md := markdown.New()
 	tokens := md.Parse([]byte(raw))
 
 	for _, t := range tokens {
 		snippet := getSnippet(t)
+		snippet.content = strings.TrimSpace(snippet.content)
 		if snippet.content != "" && snippet.lang == "release-note" {
-			return strings.TrimSpace(snippet.content)
+			return snippet.content
 		}
 	}
 	return "NONE"
@@ -149,4 +289,13 @@ func getSnippet(tok markdown.Token) snippet {
 		}
 	}
 	return snippet{}
+}
+
+func cleanReleaseNote(note string) string {
+	note = strings.TrimSpace(note)
+	note = strings.TrimPrefix(note, "-")
+	note = strings.TrimPrefix(note, "*")
+	note = strings.TrimSuffix(note, ".")
+	note = strings.TrimSpace(note)
+	return note
 }
