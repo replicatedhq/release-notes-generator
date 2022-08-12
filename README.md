@@ -20,12 +20,12 @@ Released on August 12, 2022
 
 Support for Kubernetes: 1.21, 1.22, 1.23, and 1.24
 
-### New Features {#new-features-1-90-0}
+### New Features {#new-features-1-81-0}
 * Adds support for the `alias` field in Helm chart dependencies.
 * Adds support for image tags and digests to be used together for online installations.
 * Changes the default value for `helmVersion` from `v2` to `v3` for the [HelmChart](/reference/custom-resource-helmchart) custom resource.
 
-### Bug Fixes {#bug-fixes-1-90-0}
+### Bug Fixes {#bug-fixes-1-81-0}
 * (alpha) Fix bug where license tab would not show for helm managed applications.
 * Fixes an issue that can cause `Namespace` manifests packaged in Helm charts to be excluded from deployment, causing namespaces to not be created when [useHelmInstall](/reference/custom-resource-helmchart#usehelminstall) is set to `true` and [namespace](/reference/custom-resource-helmchart#usehelminstall) is an empty string.
 * Improves the UI responsiveness on the configuration page.
