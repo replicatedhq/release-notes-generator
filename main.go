@@ -13,35 +13,36 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/blang/semver"
-	"github.com/dustin/go-humanize/english"
 	"github.com/google/go-github/v43/github"
 	"gitlab.com/golang-commonmark/markdown"
 	"golang.org/x/oauth2"
 )
 
-var rnTemplate = `## {{.Semver}}
+var rnTemplate = `## {{.Title}}
 
 Released on {{.DateString}}
-
-Support for Kubernetes: {{.SupportedVersions}}
 {{""}}
+
+{{- if .Description}}
+{{.Description}}
+{{end}}
+
 {{- if .Features }}
-### New Features {#new-features-{{.SemverDash}}}
+### New Features {#new-features-{{.TitleDash}}}
 {{- range .Features}}
 * {{.}}.
 {{- end}}
 {{end}}
 
 {{- if .Improvements }}
-### Improvements {#improvements-{{.SemverDash}}}
+### Improvements {#improvements-{{.TitleDash}}}
 {{- range .Improvements}}
 * {{.}}.
 {{- end}}
 {{end}}
 
 {{- if .Bugs }}
-### Bug Fixes {#bug-fixes-{{.SemverDash}}}
+### Bug Fixes {#bug-fixes-{{.TitleDash}}}
 {{- range .Bugs}}
 * {{.}}.
 {{- end}}
@@ -50,24 +51,29 @@ Support for Kubernetes: {{.SupportedVersions}}
 const GithubAuthTokenEnvironmentVarName = "GITHUB_AUTH_TOKEN"
 
 type ReleaseNotes struct {
-	Semver            string
-	SemverDash        string
-	DateString        string
-	SupportedVersions string
-	Features          []string
-	Improvements      []string
-	Bugs              []string
+	Title        string
+	TitleDash    string
+	DateString   string
+	Description  string
+	Features     []string
+	Improvements []string
+	Bugs         []string
 }
 
 func main() {
+	var ownerRepo string
 	var base string
-	flag.StringVar(&base, "base", "", "Base of release notes diff (defaults to the last non-prerelease tag)")
 	var head string
-	flag.StringVar(&head, "head", "", "Head of release notes diff (required and has to be a valid kots tag)")
-	var supportedVersions string
-	flag.StringVar(&supportedVersions, "supported-versions", "1.21,1.22,1.23,1.24", "Comma-separated list of supported Kubernetes versions")
-	var showPrLinks bool
-	flag.BoolVar(&showPrLinks, "pr-links", false, "Include links back to pull requests")
+	var title string
+	var description string
+	var includePrLinks bool
+
+	flag.StringVar(&ownerRepo, "owner-repo", "", "The owner/repo of the Github repository to be used (required)")
+	flag.StringVar(&base, "base", "", "Base of release notes diff (defaults to the last non-prerelease tag)")
+	flag.StringVar(&head, "head", "", "Head of release notes diff (required)")
+	flag.StringVar(&title, "title", "", "The release notes title")
+	flag.StringVar(&description, "description", "", "Description to be added to the release notes (optional)")
+	flag.BoolVar(&includePrLinks, "include-pr-links", false, "Include links back to pull requests")
 	flag.Parse()
 
 	var httpClient *http.Client
@@ -81,36 +87,34 @@ func main() {
 		fmt.Fprintf(os.Stderr, "WARNING: No %s environment variable found, rate limiting may occur\n", GithubAuthTokenEnvironmentVarName)
 	}
 
-	client := github.NewClient(httpClient)
+	ownerRepoParts := strings.Split(ownerRepo, "/")
+	if len(ownerRepoParts) != 2 {
+		log.Fatalf("Wrong number of parts in %s", ownerRepo)
+	}
+	owner := ownerRepoParts[0]
+	repo := ownerRepoParts[1]
 
+	client := github.NewClient(httpClient)
 	ctx := context.Background()
 
 	// get the latest released version if we don't have a base
 	if base == "" {
-		latest, err := getLatestReleasedVersion(ctx, client)
+		latest, err := getLatestReleasedVersion(ctx, client, owner, repo)
 		if err != nil {
 			log.Fatalf("Failed to get latest released version: %v", err)
 		}
 		base = latest
 	}
 
-	if _, err := semver.ParseTolerant(base); err != nil {
-		log.Fatalf("Failed to parse base as semver: %v", err)
-	}
-
-	if _, err := semver.ParseTolerant(head); err != nil {
-		log.Fatalf("Failed to parse head as semver: %v", err)
-	}
-
-	notes, err := getAllReleaseNotes(ctx, client, base, head, showPrLinks)
+	notes, err := getAllReleaseNotes(ctx, client, owner, repo, base, head, includePrLinks)
 	if err != nil {
 		log.Fatalf("Failed to get release notes: %v", err)
 	}
 
-	notes.Semver = strings.TrimPrefix(head, "v")
-	notes.SemverDash = strings.ReplaceAll(notes.Semver, ".", "-")
+	notes.Title = title
+	notes.TitleDash = strings.ReplaceAll(notes.Title, ".", "-")
 	notes.DateString = time.Now().Format("January 2, 2006")
-	notes.SupportedVersions = english.OxfordWordSeries(strings.Split(supportedVersions, ","), "and")
+	notes.Description = strings.ReplaceAll(description, "`", "\\`") // escape backticks
 
 	t := template.Must(template.New("template").Parse(rnTemplate))
 	err = t.Execute(os.Stdout, notes)
@@ -119,14 +123,14 @@ func main() {
 	}
 }
 
-func getLatestReleasedVersion(ctx context.Context, client *github.Client) (string, error) {
+func getLatestReleasedVersion(ctx context.Context, client *github.Client, owner string, repo string) (string, error) {
 	var releases []*github.RepositoryRelease
 	listOptions := github.ListOptions{
 		Page:    1,
 		PerPage: 100,
 	}
 
-	releases, response, err := client.Repositories.ListReleases(ctx, "replicatedhq", "kots", &listOptions)
+	releases, response, err := client.Repositories.ListReleases(ctx, owner, repo, &listOptions)
 	if err != nil {
 		return "", err
 	}
@@ -144,7 +148,7 @@ func getLatestReleasedVersion(ctx context.Context, client *github.Client) (strin
 	return latest, nil
 }
 
-func getAllReleaseNotes(ctx context.Context, client *github.Client, base, head string, showPrLinks bool) (*ReleaseNotes, error) {
+func getAllReleaseNotes(ctx context.Context, client *github.Client, owner, repo, base, head string, includePrLinks bool) (*ReleaseNotes, error) {
 	var commits []*github.RepositoryCommit
 	listOptions := github.ListOptions{
 		Page:    0,
@@ -153,8 +157,8 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client, base, head s
 	for {
 		cmp, response, err := client.Repositories.CompareCommits(
 			ctx,
-			"replicatedhq",
-			"kots",
+			owner,
+			repo,
 			base,
 			head,
 			&listOptions,
@@ -198,8 +202,8 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client, base, head s
 		}
 		pr, resp, err := client.PullRequests.Get(
 			ctx,
-			"replicatedhq",
-			"kots",
+			owner,
+			repo,
 			prNumber,
 		)
 		if err != nil {
@@ -225,7 +229,7 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client, base, head s
 				continue
 			}
 
-			if showPrLinks {
+			if includePrLinks {
 				note = fmt.Sprintf("[#%d](%s) %s", prNumber, *pr.HTMLURL, note)
 			}
 
@@ -286,5 +290,6 @@ func cleanReleaseNote(note string) string {
 	note = strings.TrimPrefix(note, "*")
 	note = strings.TrimSuffix(note, ".")
 	note = strings.TrimSpace(note)
+	note = strings.ReplaceAll(note, "`", "\\`") // escape backticks
 	return note
 }

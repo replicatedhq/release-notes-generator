@@ -1,0 +1,36 @@
+
+name: 'Replicated Release Notes Helper'
+description: 'Generates release notes markdown and writes it to the RELEASE_NOTES variable in the Github Action environment'
+inputs:
+  owner-repo:
+    description: 'The owner/repo of the Github repository to be used (required)'
+    required: true
+  base:
+    description: 'The release tag to use as the base of the release notes diff'
+    required: false
+    default: ''
+  head:
+    description: 'The release tag to use as the head of the release notes diff'
+    required: true
+  title:
+    description: 'The release notes title'
+    required: true
+  description:
+    description: 'Description to be added to the release notes'
+    required: false
+    default: ''
+  include-pr-links:
+    description: 'Include links back to pull requests'
+    required: false
+    default: false
+  github-token:
+    description: 'Github API Token'
+    required: true
+    default: ''
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - '/release-notes-generator --owner-repo="${{ inputs.owner-repo }}" --base="${{ inputs.base }}" --head="${{ inputs.head }}" --title="${{ inputs.title }}" --description="${{ inputs.description }}" --include-pr-links=${{ inputs.include-pr-links }}'
+  env:
+    GITHUB_AUTH_TOKEN: ${{ inputs.github-token }}

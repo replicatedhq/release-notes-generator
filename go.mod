@@ -1,4 +1,4 @@
-module github.com/replicatedhq/kots-release-helper
+module github.com/replicatedhq/release-notes-generator
 
 go 1.17
 
