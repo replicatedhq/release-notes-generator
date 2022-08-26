@@ -24,8 +24,8 @@ Released on {{.DateString}}
 
 {{if .Description}}
 {{.Description}}
+{{""}}
 {{end}}
-
 {{- if .Features }}
 ### New Features {#new-features-{{.TitleDash}}}
 {{- range .Features}}
