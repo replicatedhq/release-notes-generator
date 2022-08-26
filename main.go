@@ -213,34 +213,41 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client, base, head s
 			continue
 		}
 
-		note := getReleaseNote(*pr.Body)
-		if strings.EqualFold(note, "NONE") {
+		notes := getReleaseNotes(*pr.Body)
+		if len(notes) == 0 {
 			continue
 		}
 
-		note = cleanReleaseNote(note)
+		for _, note := range notes {
+			note = cleanReleaseNote(note)
 
-		if showPrLinks {
-			note = fmt.Sprintf("[#%d](%s) %s", prNumber, *pr.HTMLURL, note)
-		}
-
-		for _, lbl := range pr.Labels {
-			switch {
-			case strings.EqualFold(*lbl.Name, "type::feature"):
-				releaseNotes.Features = append(releaseNotes.Features, note)
-			case strings.EqualFold(*lbl.Name, "type::improvement"), strings.EqualFold(*lbl.Name, "type::security"):
-				releaseNotes.Improvements = append(releaseNotes.Improvements, note)
-			case strings.EqualFold(*lbl.Name, "type::bug"):
-				releaseNotes.Bugs = append(releaseNotes.Bugs, note)
+			if strings.EqualFold(note, "NONE") {
+				continue
 			}
-			break
+
+			if showPrLinks {
+				note = fmt.Sprintf("[#%d](%s) %s", prNumber, *pr.HTMLURL, note)
+			}
+
+			for _, lbl := range pr.Labels {
+				switch {
+				case strings.EqualFold(*lbl.Name, "type::feature"):
+					releaseNotes.Features = append(releaseNotes.Features, note)
+				case strings.EqualFold(*lbl.Name, "type::improvement"), strings.EqualFold(*lbl.Name, "type::security"):
+					releaseNotes.Improvements = append(releaseNotes.Improvements, note)
+				case strings.EqualFold(*lbl.Name, "type::bug"):
+					releaseNotes.Bugs = append(releaseNotes.Bugs, note)
+				}
+				break
+			}
 		}
+
 	}
 
 	return &releaseNotes, nil
 }
 
-func getReleaseNote(raw string) string {
+func getReleaseNotes(raw string) []string {
 	md := markdown.New()
 	tokens := md.Parse([]byte(raw))
 
@@ -248,10 +255,11 @@ func getReleaseNote(raw string) string {
 		snippet := getSnippet(t)
 		snippet.content = strings.TrimSpace(snippet.content)
 		if snippet.content != "" && snippet.lang == "release-note" {
-			return snippet.content
+			notes := strings.Split(snippet.content, "\n")
+			return notes
 		}
 	}
-	return "NONE"
+	return []string{}
 }
 
 //snippet represents the snippet we will output.
@@ -280,3 +288,6 @@ func cleanReleaseNote(note string) string {
 	note = strings.TrimSpace(note)
 	return note
 }
+
+// - asdfasdfasdf
+// * asdfasdfasdf
