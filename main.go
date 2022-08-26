@@ -21,6 +21,7 @@ import (
 var rnTemplate = `## {{.Title}}
 
 Released on {{.DateString}}
+{{""}}
 
 {{- if .Description}}
 {{.Description}}
