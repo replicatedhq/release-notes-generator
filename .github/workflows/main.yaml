@@ -17,7 +17,7 @@ jobs:
         base: 'v1.81.1'
         head: 'v1.82.0'
         title: '1.82.0'
-        description: ''
+        description: 'Test description'
         include-pr-links: false
         github-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Get the output
