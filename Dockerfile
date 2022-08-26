@@ -6,11 +6,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY main.go ./
-RUN go build -o kots-release-helper
+RUN go build -o release-notes-generator
 
 FROM alpine:latest
 
-COPY --from=builder /app/kots-release-helper ./
+COPY --from=builder /app/release-notes-generator ./
 COPY entrypoint.sh ./
 
 ENTRYPOINT ["./entrypoint.sh"]
