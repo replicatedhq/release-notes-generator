@@ -13,7 +13,7 @@ import (
 	"text/template"
 	"time"
 
-	semver "github.com/Masterminds/semver/v3"
+	"github.com/blang/semver"
 	"github.com/dustin/go-humanize/english"
 	"github.com/google/go-github/v43/github"
 	"gitlab.com/golang-commonmark/markdown"
@@ -61,11 +61,9 @@ type ReleaseNotes struct {
 
 func main() {
 	var base string
-	flag.StringVar(&base, "base", "", "Base of release notes diff (defaults to the last release)")
+	flag.StringVar(&base, "base", "", "Base of release notes diff (defaults to the last non-prerelease tag)")
 	var head string
-	flag.StringVar(&head, "head", "main", "Head of release notes diff")
-	var semverOverride string
-	flag.StringVar(&semverOverride, "semver", "", "Override the automatically determined semver for the release")
+	flag.StringVar(&head, "head", "", "Head of release notes diff (required and has to be a valid kots tag)")
 	var supportedVersions string
 	flag.StringVar(&supportedVersions, "supported-versions", "1.21,1.22,1.23,1.24", "Comma-separated list of supported Kubernetes versions")
 	var showPrLinks bool
@@ -96,30 +94,20 @@ func main() {
 		base = latest
 	}
 
+	if _, err := semver.ParseTolerant(base); err != nil {
+		log.Fatalf("Failed to parse base as semver: %v", err)
+	}
+
+	if _, err := semver.ParseTolerant(head); err != nil {
+		log.Fatalf("Failed to parse head as semver: %v", err)
+	}
+
 	notes, err := getAllReleaseNotes(ctx, client, base, head, showPrLinks)
 	if err != nil {
 		log.Fatalf("Failed to get release notes: %v", err)
 	}
 
-	// determine semver increment
-	ver, err := semver.NewVersion(base)
-	if err != nil {
-		log.Fatalf("Failed to parse semver: %v", err)
-	}
-	var next semver.Version
-	if semverOverride != "" {
-		override, err := semver.NewVersion(semverOverride)
-		if err != nil {
-			log.Fatalf("Failed to parse semver: %v", err)
-		}
-		next = *override
-	} else if len(notes.Features) > 0 {
-		next = ver.IncMinor()
-	} else {
-		next = ver.IncMinor()
-	}
-
-	notes.Semver = next.String()
+	notes.Semver = strings.TrimPrefix(head, "v")
 	notes.SemverDash = strings.ReplaceAll(notes.Semver, ".", "-")
 	notes.DateString = time.Now().Format("January 2, 2006")
 	notes.SupportedVersions = english.OxfordWordSeries(strings.Split(supportedVersions, ","), "and")
@@ -134,24 +122,16 @@ func main() {
 func getLatestReleasedVersion(ctx context.Context, client *github.Client) (string, error) {
 	var releases []*github.RepositoryRelease
 	listOptions := github.ListOptions{
-		Page:    0,
+		Page:    1,
 		PerPage: 100,
 	}
-	for {
-		page, response, err := client.Repositories.ListReleases(ctx, "replicatedhq", "kots", &listOptions)
-		if err != nil {
-			return "", err
-		}
-		if response.StatusCode != 200 {
-			return "", fmt.Errorf("unexpected status code when listing releases: %d", response.StatusCode)
-		}
-		if len(page) > 0 {
-			releases = append(releases, page...)
-		}
-		if response.NextPage == 0 {
-			break
-		}
-		listOptions.Page = response.NextPage
+
+	releases, response, err := client.Repositories.ListReleases(ctx, "replicatedhq", "kots", &listOptions)
+	if err != nil {
+		return "", err
+	}
+	if response.StatusCode != 200 {
+		return "", fmt.Errorf("unexpected status code when listing releases: %d", response.StatusCode)
 	}
 
 	latest := ""
@@ -247,8 +227,9 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client, base, head s
 		for _, lbl := range pr.Labels {
 			switch {
 			case strings.EqualFold(*lbl.Name, "type::feature"):
-				// TODO: Need some way to determine if this is a feature or an improvement
 				releaseNotes.Features = append(releaseNotes.Features, note)
+			case strings.EqualFold(*lbl.Name, "type::improvement"), strings.EqualFold(*lbl.Name, "type::security"):
+				releaseNotes.Improvements = append(releaseNotes.Improvements, note)
 			case strings.EqualFold(*lbl.Name, "type::bug"):
 				releaseNotes.Bugs = append(releaseNotes.Bugs, note)
 			}
