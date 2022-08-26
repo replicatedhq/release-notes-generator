@@ -1,0 +1,20 @@
+
+name: Test the GitHub action in this Repository
+on: [push]
+
+jobs:
+  test_action_job:
+    runs-on: ubuntu-latest
+    name: Test the GitHub action in this Repository
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+    - name: Test this Action
+      id: test-action
+      uses: ./
+      with:
+        base: 'v1.81.1'
+        head: 'v1.82.0'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Get the output
+      run: echo "${{ steps.hello.outputs.release-notes }}"

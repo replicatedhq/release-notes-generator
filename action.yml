@@ -1,0 +1,22 @@
+
+name: 'Replicated KOTS release'
+description: 'Create a Replicated KOTS release on a channel'
+inputs:
+  base:
+    description: 'The release tag to use as the base of the release notes diff'
+    required: false
+    default: ''
+  head:
+    description: 'The release tag to use as the head of the release notes diff'
+    required: true
+  github-token:
+    description: 'Github API Token'
+    required: true
+    default: ''
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - '/kots-release-helper --base="${{ inputs.base }}" --head="${{ inputs.head }}"'
+  env:
+    GITHUB_AUTH_TOKEN: ${{ inputs.github-token }}
