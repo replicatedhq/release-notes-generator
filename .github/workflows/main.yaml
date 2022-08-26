@@ -17,4 +17,4 @@ jobs:
         head: 'v1.82.0'
         github-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Get the output
-      run: echo "${{ steps.hello.outputs.release-notes }}"
+      run: echo "${{ steps.test-action.outputs.release-notes }}"
