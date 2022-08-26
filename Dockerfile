@@ -1,13 +1,12 @@
 FROM golang:1.17-alpine as builder
 
-RUN mkdir /app
 WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY main.go ./
-RUN go build
+RUN go build -o kots-release-helper
 
 FROM alpine:latest
 
