@@ -114,7 +114,7 @@ func main() {
 	notes.Title = title
 	notes.TitleDash = strings.ReplaceAll(notes.Title, ".", "-")
 	notes.DateString = time.Now().Format("January 2, 2006")
-	notes.Description = description
+	notes.Description = strings.ReplaceAll(description, "`", "\\`") // escape backticks
 
 	t := template.Must(template.New("template").Parse(rnTemplate))
 	err = t.Execute(os.Stdout, notes)
@@ -290,6 +290,6 @@ func cleanReleaseNote(note string) string {
 	note = strings.TrimPrefix(note, "*")
 	note = strings.TrimSuffix(note, ".")
 	note = strings.TrimSpace(note)
-	note = strings.ReplaceAll(note, "`", "\\`")
+	note = strings.ReplaceAll(note, "`", "\\`") // escape backticks
 	return note
 }
