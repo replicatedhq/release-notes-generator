@@ -288,6 +288,3 @@ func cleanReleaseNote(note string) string {
 	note = strings.TrimSpace(note)
 	return note
 }
-
-// - asdfasdfasdf
-// * asdfasdfasdf
