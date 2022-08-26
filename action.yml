@@ -1,6 +1,6 @@
 
-name: 'Replicated KOTS release'
-description: 'Create a Replicated KOTS release on a channel'
+name: 'Replicated Release Notes Helper'
+description: 'Generates release notes markdown and writes it to the RELEASE_NOTES variable in the Github Action environment'
 inputs:
   base:
     description: 'The release tag to use as the base of the release notes diff'
