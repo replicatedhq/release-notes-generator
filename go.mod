@@ -3,7 +3,7 @@ module github.com/replicatedhq/kots-release-helper
 go 1.17
 
 require (
-	github.com/Masterminds/semver/v3 v3.1.1
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/dustin/go-humanize v1.0.0
 	github.com/google/go-github/v43 v43.0.0
 	gitlab.com/golang-commonmark/markdown v0.0.0-20211110145824-bf3e522c626a
