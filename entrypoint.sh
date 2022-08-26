@@ -8,4 +8,4 @@ fi
 
 RELEASE_NOTES=$(eval $CMD)
 
-echo "::set-output name=release-notes::$RELEASE_NOTES"
+echo "::set-output name=release-notes::'$RELEASE_NOTES'"
