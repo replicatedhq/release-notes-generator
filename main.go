@@ -290,5 +290,6 @@ func cleanReleaseNote(note string) string {
 	note = strings.TrimPrefix(note, "*")
 	note = strings.TrimSuffix(note, ".")
 	note = strings.TrimSpace(note)
+	note = strings.ReplaceAll(note, "`", "\\`")
 	return note
 }
