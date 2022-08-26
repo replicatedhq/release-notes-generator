@@ -22,4 +22,4 @@ jobs:
         include-pr-links: false
         github-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Get the output
-      run: echo "${{ env.RELEASE_NOTES }}"
+      run: echo "${{ steps.test-action.outputs.release-notes }}"
