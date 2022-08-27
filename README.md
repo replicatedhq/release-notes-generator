@@ -1,53 +1,68 @@
-# KOTS Release Helper
+# Release Notes Generator
 
-Takes the diff of the last release and main, finds all pull requests involved, and takes out their release notes and orders them into features/bugs.
+Takes the diff of two releases, finds all pull requests involved, and takes out their release notes and orders them into features/improvements/bugs.
 
-## Running
+### Usage
 
-*Note, Github API rate limiting may impact the ability to run this script.
-To avoid this, set the environment variable GITHUB_AUTH_TOKEN with a token that has `repo:status` permissions.*
+An example workflow is included at [./.github/workflows/main.yml](./.github/workflows/main.yml)
 
-```sh
-go run main.go
+```yaml
+name: Generate release notes for Replicated KOTS
+on: [push]
+
+jobs:
+  test_action_job:
+    runs-on: ubuntu-latest
+    name: Generate release notes
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+    - id: test-action
+      uses: replicatedhq/release-notes-generator@main
+      with:
+        owner-repo: replicatedhq/kots
+        base: 'v1.81.1'
+        head: 'v1.82.0'
+        title: '1.82.0'
+        description: 'Support for Kubernetes: 1.21, 1.22, 1.23, and 1.24'
+        include-pr-links: false
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Print the output
+      run: echo "${{ steps.test-action.outputs.release-notes }}"
 ```
 
-Release notes markdown is written to stdout. Example:
+### Inputs
 
-```
-## 1.81.0
+#### owner-repo (required)
 
-Released on August 12, 2022
+The owner/repo of the Github repository to be used.
 
-Support for Kubernetes: 1.21, 1.22, 1.23, and 1.24
+#### base (optional)
 
-### New Features {#new-features-1-81-0}
-* Adds support for the `alias` field in Helm chart dependencies.
-* Adds support for image tags and digests to be used together for online installations.
-* Changes the default value for `helmVersion` from `v2` to `v3` for the [HelmChart](/reference/custom-resource-helmchart) custom resource.
+The release tag to use as the base of the release notes diff.
 
-### Bug Fixes {#bug-fixes-1-81-0}
-* (alpha) Fix bug where license tab would not show for helm managed applications.
-* Fixes an issue that can cause `Namespace` manifests packaged in Helm charts to be excluded from deployment, causing namespaces to not be created when [useHelmInstall](/reference/custom-resource-helmchart#usehelminstall) is set to `true` and [namespace](/reference/custom-resource-helmchart#usehelminstall) is an empty string.
-* Improves the UI responsiveness on the configuration page.
-* Fixes an issue where GitOps was being enabled before the deploy key was added to the git provider.
-* (alpha) hide copy command in UI when clipboard is not available.
-```
+#### head (required)
 
-## Configuration
+The release tag to use as the head of the release notes diff.
 
-```
-  -base string
-        Base of release notes diff (defaults to the last release)
-  -head string
-        Head of release notes diff (default "main")
-  -pr-links
-        Include links back to pull requests
-  -semver string
-        Override the automatically determined semver for the release
-  -supported-versions string
-        Comma-separated list of supported Kubernetes versions (default "1.21,1.22,1.23,1.24")
-```
+#### title
 
-## Next Steps
+The release notes title.
 
-Currently, there is no way for the script to differentiate between "New Features" and "Improvements". Potential solution could be to require sub-labels for `type::feature` PRs.
+#### description
+
+Description to be added to the release notes.
+
+#### include-pr-links
+
+Include links back to pull requests.
+
+#### github-token
+
+Github API token to use to avoid rate limiting.
+
+### Outputs
+
+#### release-notes
+
+The generated release notes markdown.
