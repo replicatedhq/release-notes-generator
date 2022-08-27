@@ -10,7 +10,7 @@ RUN go build -o release-notes-generator
 
 FROM alpine:latest
 
-COPY --from=builder /app/release-notes-generator ./
-COPY entrypoint.sh ./
+COPY --from=builder /app/release-notes-generator /release-notes-generator
+COPY entrypoint.sh /entrypoint.sh
 
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["/entrypoint.sh"]
