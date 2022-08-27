@@ -34,6 +34,6 @@ runs:
   using: 'docker'
   image: 'Dockerfile'
   args:
-    - './release-notes-generator --owner-repo="${{ inputs.owner-repo }}" --base="${{ inputs.base }}" --head="${{ inputs.head }}" --title="${{ inputs.title }}" --description="${{ inputs.description }}" --include-pr-links=${{ inputs.include-pr-links }}'
+    - '/release-notes-generator --owner-repo="${{ inputs.owner-repo }}" --base="${{ inputs.base }}" --head="${{ inputs.head }}" --title="${{ inputs.title }}" --description="${{ inputs.description }}" --include-pr-links=${{ inputs.include-pr-links }}'
   env:
     GITHUB_AUTH_TOKEN: ${{ inputs.github-token }}
