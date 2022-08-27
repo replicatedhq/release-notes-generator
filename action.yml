@@ -27,6 +27,9 @@ inputs:
     description: 'Github API Token'
     required: true
     default: ''
+outputs:
+  release-notes:
+    description: 'The generated release notes markdown'
 runs:
   using: 'docker'
   image: 'Dockerfile'

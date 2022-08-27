@@ -21,5 +21,5 @@ jobs:
         description: 'Support for Kubernetes: 1.21, 1.22, 1.23, and 1.24'
         include-pr-links: false
         github-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Get the output
+    - name: Print the output
       run: echo "${{ steps.test-action.outputs.release-notes }}"
