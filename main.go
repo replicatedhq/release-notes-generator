@@ -233,19 +233,32 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client, owner, repo,
 				note = fmt.Sprintf("[#%d](%s) %s", prNumber, *pr.HTMLURL, note)
 			}
 
+			// type::improvement is a secondary label and co-exists with type::feature,
+			// so we don't break when we find type::feature label.
+			noteType := ""
 			for _, lbl := range pr.Labels {
-				switch {
-				case strings.EqualFold(*lbl.Name, "type::feature"):
-					releaseNotes.Features = append(releaseNotes.Features, note)
-				case strings.EqualFold(*lbl.Name, "type::improvement"), strings.EqualFold(*lbl.Name, "type::security"):
-					releaseNotes.Improvements = append(releaseNotes.Improvements, note)
-				case strings.EqualFold(*lbl.Name, "type::bug"):
-					releaseNotes.Bugs = append(releaseNotes.Bugs, note)
+				if strings.EqualFold(*lbl.Name, "type::feature") {
+					noteType = "feature"
 				}
-				break
+				if strings.EqualFold(*lbl.Name, "type::improvement") || strings.EqualFold(*lbl.Name, "type::security") {
+					noteType = "improvement"
+					break
+				}
+				if strings.EqualFold(*lbl.Name, "type::bug") {
+					noteType = "bug"
+					break
+				}
+			}
+
+			switch noteType {
+			case "feature":
+				releaseNotes.Features = append(releaseNotes.Features, note)
+			case "improvement":
+				releaseNotes.Improvements = append(releaseNotes.Improvements, note)
+			case "bug":
+				releaseNotes.Bugs = append(releaseNotes.Bugs, note)
 			}
 		}
-
 	}
 
 	return &releaseNotes, nil
