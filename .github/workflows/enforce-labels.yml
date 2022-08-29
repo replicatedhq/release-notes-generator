@@ -1,0 +1,13 @@
+name: Enforce PR labels
+
+on: 
+  pull_request:
+    types:
+      - opened
+      - labeled
+      - unlabeled
+      - synchronize
+
+jobs:
+  enforce-labels:
+    uses: replicatedhq/reusable-workflows/.github/workflows/pr-enforce-labels.yaml@main
