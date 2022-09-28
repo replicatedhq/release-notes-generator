@@ -74,7 +74,9 @@ func main() {
 	flag.StringVar(&title, "title", "", "The release notes title")
 	flag.StringVar(&description, "description", "", "Description to be added to the release notes (optional)")
 	flag.BoolVar(&includePrLinks, "include-pr-links", false, "Include links back to pull requests")
+	typeLabelFlags := NewTypeLabelFlags(flag.CommandLine)
 	flag.Parse()
+	typeLabelFlags.Parse()
 
 	var httpClient *http.Client
 	// if we have a token, use it to authenticate to prevent rate limiting
@@ -106,7 +108,7 @@ func main() {
 		base = latest
 	}
 
-	notes, err := getAllReleaseNotes(ctx, client, owner, repo, base, head, includePrLinks)
+	notes, err := getAllReleaseNotes(ctx, client, owner, repo, base, head, includePrLinks, typeLabelFlags)
 	if err != nil {
 		log.Fatalf("Failed to get release notes: %v", err)
 	}
@@ -148,7 +150,7 @@ func getLatestReleasedVersion(ctx context.Context, client *github.Client, owner 
 	return latest, nil
 }
 
-func getAllReleaseNotes(ctx context.Context, client *github.Client, owner, repo, base, head string, includePrLinks bool) (*ReleaseNotes, error) {
+func getAllReleaseNotes(ctx context.Context, client *github.Client, owner, repo, base, head string, includePrLinks bool, typeLabelFlags *TypeLabelFlags) (*ReleaseNotes, error) {
 	var commits []*github.RepositoryCommit
 	listOptions := github.ListOptions{
 		Page:    0,
@@ -233,22 +235,7 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client, owner, repo,
 				note = fmt.Sprintf("[#%d](%s) %s", prNumber, *pr.HTMLURL, note)
 			}
 
-			// type::improvement is a secondary label and co-exists with type::feature,
-			// so we don't break when we find type::feature label.
-			noteType := ""
-			for _, lbl := range pr.Labels {
-				if strings.EqualFold(*lbl.Name, "type::feature") {
-					noteType = "feature"
-				}
-				if strings.EqualFold(*lbl.Name, "type::improvement") || strings.EqualFold(*lbl.Name, "type::security") {
-					noteType = "improvement"
-					break
-				}
-				if strings.EqualFold(*lbl.Name, "type::bug") {
-					noteType = "bug"
-					break
-				}
-			}
+			noteType := typeLabelFlags.GetNoteTypeFromLabels(pr.Labels)
 
 			switch noteType {
 			case "feature":
@@ -279,13 +266,13 @@ func getReleaseNotes(raw string) []string {
 	return []string{}
 }
 
-//snippet represents the snippet we will output.
+// snippet represents the snippet we will output.
 type snippet struct {
 	content string
 	lang    string
 }
 
-//getSnippet extract only code snippet from markdown object.
+// getSnippet extract only code snippet from markdown object.
 func getSnippet(tok markdown.Token) snippet {
 	switch tok := tok.(type) {
 	case *markdown.Fence:

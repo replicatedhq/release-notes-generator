@@ -5,7 +5,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY main.go ./
+COPY *.go ./
 RUN go build -o release-notes-generator
 
 FROM alpine:latest
