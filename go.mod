@@ -1,10 +1,8 @@
 module github.com/replicatedhq/release-notes-generator
 
-go 1.17
+go 1.19
 
 require (
-	github.com/blang/semver v3.5.1+incompatible
-	github.com/dustin/go-humanize v1.0.0
 	github.com/google/go-github/v43 v43.0.0
 	gitlab.com/golang-commonmark/markdown v0.0.0-20211110145824-bf3e522c626a
 	golang.org/x/oauth2 v0.0.0-20220808172628-8227340efae7
