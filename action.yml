@@ -27,6 +27,15 @@ inputs:
     description: 'Github API Token'
     required: true
     default: ''
+  feature-type-labels:
+    description: 'A comma separated list of labels to consider as features'
+    default: 'type::feature'
+  improvement-type-labels:
+    description: 'A comma separated list of labels to consider as improvements'
+    default: 'type::improvement,type::security'
+  bug-type-labels:
+    description: 'A comma separated list of labels to consider as bugs'
+    default: 'type::bug'
 outputs:
   release-notes:
     description: 'The generated release notes markdown'
@@ -34,6 +43,14 @@ runs:
   using: 'docker'
   image: 'Dockerfile'
   args:
-    - '/release-notes-generator --owner-repo="${{ inputs.owner-repo }}" --base="${{ inputs.base }}" --head="${{ inputs.head }}" --title="${{ inputs.title }}" --description="${{ inputs.description }}" --include-pr-links=${{ inputs.include-pr-links }}'
+    - --owner-repo=${{ inputs.owner-repo }}
+    - --base=${{ inputs.base }}
+    - --head=${{ inputs.head }}
+    - --title=${{ inputs.title }}
+    - --description=${{ inputs.description }}
+    - --include-pr-links=${{ inputs.include-pr-links }}
+    - --feature-type-labels=${{ inputs.feature-type-labels }}
+    - --improvement-type-labels=${{ inputs.improvement-type-labels }}
+    - --bug-type-labels=${{ inputs.bug-type-labels }}
   env:
     GITHUB_AUTH_TOKEN: ${{ inputs.github-token }}
