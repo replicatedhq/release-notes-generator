@@ -46,8 +46,8 @@ runs:
     - --owner-repo=${{ inputs.owner-repo }}
     - --base=${{ inputs.base }}
     - --head=${{ inputs.head }}
-    - --title=${{ inputs.title }}
-    - --description=${{ inputs.description }}
+    - --title="${{ inputs.title }}"
+    - --description="${{ inputs.description }}"
     - --include-pr-links=${{ inputs.include-pr-links }}
     - --feature-type-labels=${{ inputs.feature-type-labels }}
     - --improvement-type-labels=${{ inputs.improvement-type-labels }}
