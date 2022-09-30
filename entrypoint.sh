@@ -2,8 +2,6 @@
 
 set -e
 
-eval set -- "$@"
-
 RELEASE_NOTES="$(/release-notes-generator "$@")"
 
 RELEASE_NOTES="${RELEASE_NOTES//'%'/'%25'}"
