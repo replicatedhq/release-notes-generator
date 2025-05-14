@@ -109,14 +109,13 @@ func main() {
 	}
 
 	notes, err := getAllReleaseNotes(ctx, client, owner, repo, base, head, includePrLinks, typeLabelFlags)
+	if err != nil {
+		log.Fatalf("Failed to get release notes: %v", err)
+	}
 
 	// if the release notes do not contain any features, improvements, or bugs, do not submit release notes
 	if len(notes.Features) == 0 && len(notes.Improvements) == 0 && len(notes.Bugs) == 0 {
 		return
-	}
-
-	if err != nil {
-		log.Fatalf("Failed to get release notes: %v", err)
 	}
 
 	notes.Title = title
