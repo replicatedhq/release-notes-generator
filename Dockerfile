@@ -1,4 +1,4 @@
-FROM golang:1.19-alpine as builder
+FROM cgr.dev/chainguard/go:latest AS builder
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ RUN go mod download
 COPY *.go ./
 RUN go build -o release-notes-generator
 
-FROM alpine:latest
+FROM cgr.dev/chainguard/wolfi-base:latest
 
 COPY --from=builder /app/release-notes-generator /release-notes-generator
 COPY entrypoint.sh /entrypoint.sh
