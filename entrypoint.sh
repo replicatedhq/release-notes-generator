@@ -6,8 +6,12 @@ eval set -- "$@"
 
 RELEASE_NOTES="$(/release-notes-generator "$@")"
 
-RELEASE_NOTES="${RELEASE_NOTES//'%'/'%25'}"
-RELEASE_NOTES="${RELEASE_NOTES//$'\n'/'%0A'}"
-RELEASE_NOTES="${RELEASE_NOTES//$'\r'/'%0D'}"
-
-echo "::set-output name=release-notes::$RELEASE_NOTES"
+# GitHub disabled the legacy `::set-output` workflow command, so write the
+# (multi-line) result to the step output via the environment file instead.
+# A random delimiter avoids any collision with the release-notes content.
+delimiter="ghadelimiter_$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+{
+  printf 'release-notes<<%s\n' "$delimiter"
+  printf '%s\n' "$RELEASE_NOTES"
+  printf '%s\n' "$delimiter"
+} >> "$GITHUB_OUTPUT"
