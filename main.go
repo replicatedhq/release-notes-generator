@@ -300,7 +300,7 @@ func getReleaseNotes(raw string) []ExtractedNote {
 		switch snippet.lang {
 		case "release-note":
 			cat = CategoryUnspecified
-		case "release-note-features":
+		case "release-notes-features":
 			cat = CategoryFeature
 		case "release-notes-fixes":
 			cat = CategoryBug
