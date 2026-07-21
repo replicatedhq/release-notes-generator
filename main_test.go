@@ -27,7 +27,7 @@ func TestGetReleaseNotes(t *testing.T) {
 		},
 		{
 			name: "new three-block template",
-			raw: "```release-note-features\n" +
+			raw: "```release-notes-features\n" +
 				"New feature A\n" +
 				"```\n" +
 				"```release-notes-fixes\n" +
@@ -47,7 +47,7 @@ func TestGetReleaseNotes(t *testing.T) {
 			raw: "```release-note\n" +
 				"Legacy note\n" +
 				"```\n" +
-				"```release-note-features\n" +
+				"```release-notes-features\n" +
 				"Named feature note\n" +
 				"```\n",
 			want: []ExtractedNote{
