@@ -240,22 +240,13 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client, owner, repo,
 				text = fmt.Sprintf("[#%d](%s) %s", prNumber, *pr.HTMLURL, text)
 			}
 
-			switch en.Category {
+			switch classifyNote(en, pr.Labels, typeLabelFlags) {
 			case CategoryFeature:
 				releaseNotes.Features = append(releaseNotes.Features, text)
 			case CategoryBug:
 				releaseNotes.Bugs = append(releaseNotes.Bugs, text)
 			case CategoryImprovement:
 				releaseNotes.Improvements = append(releaseNotes.Improvements, text)
-			case CategoryUnspecified:
-				switch typeLabelFlags.GetNoteTypeFromLabels(pr.Labels) {
-				case "feature":
-					releaseNotes.Features = append(releaseNotes.Features, text)
-				case "improvement":
-					releaseNotes.Improvements = append(releaseNotes.Improvements, text)
-				case "bug":
-					releaseNotes.Bugs = append(releaseNotes.Bugs, text)
-				}
 			}
 		}
 	}
@@ -275,6 +266,23 @@ const (
 type ExtractedNote struct {
 	Text     string
 	Category NoteCategory
+}
+
+func classifyNote(en ExtractedNote, prLabels []*github.Label, typeLabelFlags *TypeLabelFlags) NoteCategory {
+	switch en.Category {
+	case CategoryFeature, CategoryBug, CategoryImprovement:
+		return en.Category
+	case CategoryUnspecified:
+		switch typeLabelFlags.GetNoteTypeFromLabels(prLabels) {
+		case "feature":
+			return CategoryFeature
+		case "improvement":
+			return CategoryImprovement
+		case "bug":
+			return CategoryBug
+		}
+	}
+	return ""
 }
 
 func getReleaseNotes(raw string) []ExtractedNote {

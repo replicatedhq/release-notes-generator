@@ -2,7 +2,6 @@ package main
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/google/go-github/v43/github"
@@ -82,7 +81,7 @@ func TestGetReleaseNotes(t *testing.T) {
 	}
 }
 
-func TestClassifyExtractedNotes(t *testing.T) {
+func TestClassifyNote(t *testing.T) {
 	typeFeature := "type::feature"
 	typeImprovement := "type::improvement"
 	typeBug := "type::bug"
@@ -93,125 +92,63 @@ func TestClassifyExtractedNotes(t *testing.T) {
 		BugTypeLabels:         []string{typeBug},
 	}
 
-	htmlURL := "https://example.com/pr/1"
-
 	tests := []struct {
-		name           string
-		notes          []ExtractedNote
-		prLabels       []*github.Label
-		wantFeatures   []string
-		wantImprovements []string
-		wantBugs       []string
+		name       string
+		note       ExtractedNote
+		prLabels   []*github.Label
+		wantBucket NoteCategory
 	}{
 		{
-			name: "named fence overrides labels",
-			notes: []ExtractedNote{
-				{Text: "feat note", Category: CategoryFeature},
-			},
-			prLabels:       []*github.Label{{Name: &typeBug}},
-			wantFeatures:   []string{"feat note"},
-			wantImprovements: []string{},
-			wantBugs:       []string{},
+			name:       "named feature fence overrides bug label",
+			note:       ExtractedNote{Text: "feat note", Category: CategoryFeature},
+			prLabels:   []*github.Label{{Name: &typeBug}},
+			wantBucket: CategoryFeature,
 		},
 		{
-			name: "legacy note classified by feature label",
-			notes: []ExtractedNote{
-				{Text: "legacy feat", Category: CategoryUnspecified},
-			},
-			prLabels:       []*github.Label{{Name: &typeFeature}},
-			wantFeatures:   []string{"legacy feat"},
-			wantImprovements: []string{},
-			wantBugs:       []string{},
+			name:       "named bug fence overrides feature label",
+			note:       ExtractedNote{Text: "bug note", Category: CategoryBug},
+			prLabels:   []*github.Label{{Name: &typeFeature}},
+			wantBucket: CategoryBug,
 		},
 		{
-			name: "legacy note classified by improvement label overriding feature",
-			notes: []ExtractedNote{
-				{Text: "legacy improvement", Category: CategoryUnspecified},
-			},
+			name:       "named improvement fence overrides feature label",
+			note:       ExtractedNote{Text: "impr note", Category: CategoryImprovement},
+			prLabels:   []*github.Label{{Name: &typeFeature}},
+			wantBucket: CategoryImprovement,
+		},
+		{
+			name:       "legacy note classified by feature label",
+			note:       ExtractedNote{Text: "legacy feat", Category: CategoryUnspecified},
+			prLabels:   []*github.Label{{Name: &typeFeature}},
+			wantBucket: CategoryFeature,
+		},
+		{
+			name:       "legacy note classified by bug label",
+			note:       ExtractedNote{Text: "legacy bug", Category: CategoryUnspecified},
+			prLabels:   []*github.Label{{Name: &typeBug}},
+			wantBucket: CategoryBug,
+		},
+		{
+			name:       "legacy note improvement label overrides feature label",
+			note:       ExtractedNote{Text: "legacy improvement", Category: CategoryUnspecified},
 			prLabels: []*github.Label{
 				{Name: &typeFeature},
 				{Name: &typeImprovement},
 			},
-			wantFeatures:     []string{},
-			wantImprovements: []string{"legacy improvement"},
-			wantBugs:         []string{},
+			wantBucket: CategoryImprovement,
 		},
 		{
-			name: "legacy note with no matching label is dropped",
-			notes: []ExtractedNote{
-				{Text: "orphan note", Category: CategoryUnspecified},
-			},
-			prLabels:         []*github.Label{{Name: ptrString("kind::misc")}},
-			wantFeatures:     []string{},
-			wantImprovements: []string{},
-			wantBugs:         []string{},
-		},
-		{
-			name: "NONE skipped in legacy fence",
-			notes: []ExtractedNote{
-				{Text: "NONE", Category: CategoryUnspecified},
-			},
-			prLabels:         []*github.Label{{Name: &typeFeature}},
-			wantFeatures:     []string{},
-			wantImprovements: []string{},
-			wantBugs:         []string{},
-		},
-		{
-			name: "NONE skipped in named fence",
-			notes: []ExtractedNote{
-				{Text: "NONE", Category: CategoryFeature},
-			},
-			prLabels:         []*github.Label{{Name: &typeFeature}},
-			wantFeatures:     []string{},
-			wantImprovements: []string{},
-			wantBugs:         []string{},
+			name:       "legacy note with no matching label is dropped",
+			note:       ExtractedNote{Text: "orphan note", Category: CategoryUnspecified},
+			prLabels:   []*github.Label{{Name: ptrString("kind::misc")}},
+			wantBucket: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			releaseNotes := &ReleaseNotes{
-				Features:     []string{},
-				Improvements: []string{},
-				Bugs:         []string{},
-			}
-			pr := &github.PullRequest{
-				HTMLURL: &htmlURL,
-				Labels:  tt.prLabels,
-			}
-
-			for _, en := range tt.notes {
-				text := cleanReleaseNote(en.Text)
-				if strings.EqualFold(text, "NONE") || text == "" {
-					continue
-				}
-				switch en.Category {
-				case CategoryFeature:
-					releaseNotes.Features = append(releaseNotes.Features, text)
-				case CategoryBug:
-					releaseNotes.Bugs = append(releaseNotes.Bugs, text)
-				case CategoryImprovement:
-					releaseNotes.Improvements = append(releaseNotes.Improvements, text)
-				case CategoryUnspecified:
-					switch typeLabelFlags.GetNoteTypeFromLabels(pr.Labels) {
-					case "feature":
-						releaseNotes.Features = append(releaseNotes.Features, text)
-					case "improvement":
-						releaseNotes.Improvements = append(releaseNotes.Improvements, text)
-					case "bug":
-						releaseNotes.Bugs = append(releaseNotes.Bugs, text)
-					}
-				}
-			}
-
-			if !reflect.DeepEqual(releaseNotes.Features, tt.wantFeatures) {
-				t.Errorf("Features = %#v, want %#v", releaseNotes.Features, tt.wantFeatures)
-			}
-			if !reflect.DeepEqual(releaseNotes.Improvements, tt.wantImprovements) {
-				t.Errorf("Improvements = %#v, want %#v", releaseNotes.Improvements, tt.wantImprovements)
-			}
-			if !reflect.DeepEqual(releaseNotes.Bugs, tt.wantBugs) {
-				t.Errorf("Bugs = %#v, want %#v", releaseNotes.Bugs, tt.wantBugs)
+			if got := classifyNote(tt.note, tt.prLabels, typeLabelFlags); got != tt.wantBucket {
+				t.Errorf("classifyNote() = %v, want %v", got, tt.wantBucket)
 			}
 		})
 	}
