@@ -229,26 +229,24 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client, owner, repo,
 			continue
 		}
 
-		for _, note := range notes {
-			note = cleanReleaseNote(note)
+		for _, en := range notes {
+			text := cleanReleaseNote(en.Text)
 
-			if strings.EqualFold(note, "NONE") {
+			if strings.EqualFold(text, "NONE") || text == "" {
 				continue
 			}
 
 			if includePrLinks {
-				note = fmt.Sprintf("[#%d](%s) %s", prNumber, *pr.HTMLURL, note)
+				text = fmt.Sprintf("[#%d](%s) %s", prNumber, *pr.HTMLURL, text)
 			}
 
-			noteType := typeLabelFlags.GetNoteTypeFromLabels(pr.Labels)
-
-			switch noteType {
-			case "feature":
-				releaseNotes.Features = append(releaseNotes.Features, note)
-			case "improvement":
-				releaseNotes.Improvements = append(releaseNotes.Improvements, note)
-			case "bug":
-				releaseNotes.Bugs = append(releaseNotes.Bugs, note)
+			switch classifyNote(en, pr.Labels, typeLabelFlags) {
+			case CategoryFeature:
+				releaseNotes.Features = append(releaseNotes.Features, text)
+			case CategoryBug:
+				releaseNotes.Bugs = append(releaseNotes.Bugs, text)
+			case CategoryImprovement:
+				releaseNotes.Improvements = append(releaseNotes.Improvements, text)
 			}
 		}
 	}
@@ -256,19 +254,66 @@ func getAllReleaseNotes(ctx context.Context, client *github.Client, owner, repo,
 	return &releaseNotes, nil
 }
 
-func getReleaseNotes(raw string) []string {
+type NoteCategory string
+
+const (
+	CategoryFeature     NoteCategory = "feature"
+	CategoryImprovement NoteCategory = "improvement"
+	CategoryBug         NoteCategory = "bug"
+	CategoryUnspecified NoteCategory = "unspecified"
+)
+
+type ExtractedNote struct {
+	Text     string
+	Category NoteCategory
+}
+
+func classifyNote(en ExtractedNote, prLabels []*github.Label, typeLabelFlags *TypeLabelFlags) NoteCategory {
+	switch en.Category {
+	case CategoryFeature, CategoryBug, CategoryImprovement:
+		return en.Category
+	case CategoryUnspecified:
+		switch typeLabelFlags.GetNoteTypeFromLabels(prLabels) {
+		case "feature":
+			return CategoryFeature
+		case "improvement":
+			return CategoryImprovement
+		case "bug":
+			return CategoryBug
+		}
+	}
+	return ""
+}
+
+func getReleaseNotes(raw string) []ExtractedNote {
 	md := markdown.New()
 	tokens := md.Parse([]byte(raw))
 
+	var out []ExtractedNote
 	for _, t := range tokens {
 		snippet := getSnippet(t)
 		snippet.content = strings.TrimSpace(snippet.content)
-		if snippet.content != "" && snippet.lang == "release-note" {
-			notes := strings.Split(snippet.content, "\n")
-			return notes
+		if snippet.content == "" {
+			continue
+		}
+		var cat NoteCategory
+		switch snippet.lang {
+		case "release-note":
+			cat = CategoryUnspecified
+		case "release-note-features":
+			cat = CategoryFeature
+		case "release-notes-fixes":
+			cat = CategoryBug
+		case "release-notes-improvements":
+			cat = CategoryImprovement
+		default:
+			continue
+		}
+		for _, line := range strings.Split(snippet.content, "\n") {
+			out = append(out, ExtractedNote{Text: line, Category: cat})
 		}
 	}
-	return []string{}
+	return out
 }
 
 // snippet represents the snippet we will output.
