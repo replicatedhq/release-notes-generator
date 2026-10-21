@@ -138,10 +138,16 @@ func TestClassifyNote(t *testing.T) {
 			wantBucket: CategoryImprovement,
 		},
 		{
-			name:       "legacy note with no matching label is dropped",
+			name:       "legacy note with no matching label defaults to improvement",
 			note:       ExtractedNote{Text: "orphan note", Category: CategoryUnspecified},
 			prLabels:   []*github.Label{{Name: ptrString("kind::misc")}},
-			wantBucket: "",
+			wantBucket: CategoryImprovement,
+		},
+		{
+			name:       "legacy note on unlabeled PR defaults to improvement",
+			note:       ExtractedNote{Text: "unlabeled note", Category: CategoryUnspecified},
+			prLabels:   nil,
+			wantBucket: CategoryImprovement,
 		},
 	}
 

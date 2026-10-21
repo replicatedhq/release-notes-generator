@@ -281,6 +281,10 @@ func classifyNote(en ExtractedNote, prLabels []*github.Label, typeLabelFlags *Ty
 		case "bug":
 			return CategoryBug
 		}
+		// A note the author wrote is still a note when the PR has no type
+		// label. File it under improvements instead of dropping it, so it
+		// reaches the release notes PR for review.
+		return CategoryImprovement
 	}
 	return ""
 }
