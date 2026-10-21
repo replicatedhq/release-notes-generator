@@ -1,0 +1,21 @@
+main.go
+  s_f0b82bfb8e245f::t_56ba320cac3b26 284-287
+main_test.go
+  s_f0b82bfb8e245f::t_483e74508357a6 141,144-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ad1a0f7b9ff8cb2669aaae968fd4de51d825ab40",
+  "prompts": {},
+  "sessions": {
+    "s_f0b82bfb8e245f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_f0b82bfb8e245f",
+        "model": "unknown"
+      },
+      "human_author": "Amber Alston <amber@replicated.com>"
+    }
+  }
+}
